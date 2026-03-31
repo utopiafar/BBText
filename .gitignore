@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Config with secrets (use config.example.toml as template)
+config.toml
+
+# Output directory (generated video data)
+output/
+
+# OS files
+.DS_Store
+
+# Test cache
+.pytest_cache/
+
+# Skills eval workspace data
+skills/bbt-video-workspace/

@@ -1,0 +1,21 @@
+[bilibili]
+cookie = ""          # 可选，登录后可获取更高质量音频
+
+[whisper]
+model = "large-v3"   # 保留字段，实际使用 SenseVoice
+device = "coreml"     # Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
+language = "zh"
+compute_type = "int8"
+
+[llm]
+provider = "openai"  # "openai" 或 "anthropic"
+api_key = ""          # LLM API Key，也可通过环境变量 BBT_LLM_API_KEY 设置
+base_url = "https://openrouter.ai/api/v1"
+model = "deepseek/deepseek-v3.2"
+
+[output]
+dir = "output"
+
+[feishu]
+folder_token = ""    # 飞书云空间文件夹 token，用于自动保存文档（bbt-video skill 使用）
+user_id = ""         # 飞书用户 open_id，用于发送完成通知（bbt-video skill 使用）

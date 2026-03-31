@@ -1,28 +1,34 @@
 # BBText - B站视频音频转字幕工具
 
-BBText 是一个 Python 命令行 + GUI 工具，用于自动下载 B 站视频的音频，本地转写成字幕，再用 LLM 做语义修正和章节总结。
+BBText 是一个 Python 命令行 + GUI 工具，用于自动下载 B 站视频的音频，本地转写成字幕。搭配 Claude Code skill（bbt-video）可直接在对话中完成字幕精校和章节总结，并自动发布到飞书文档。CLI 也支持通过外部 LLM API 做字幕修正和总结。
 
 ## 架构
 
 ```
-URL 输入 → 音频下载 → 本地转写 → LLM 修正 → 章节总结
-  ↓          ↓           ↓          ↓          ↓
-Bilibili   DASH/FLV   SenseVoice  OpenRouter  OpenRouter
-WBI 签名   纯音频提取  sherpa-onnx  mimo-v2-pro  mimo-v2-pro
+URL 输入 → 音频下载 → 本地转写 → 精校修正 → 章节总结 → 飞书文档
+  ↓          ↓           ↓          ↓          ↓          ↓
+Bilibili   DASH/FLV   SenseVoice  ┌──────────────────┐  lark-cli
+WBI 签名   纯音频提取  sherpa-onnx  │ bbt-video skill:  │  自动创建
+                                  │ Claude 直接精校    │  文档+通知
+                                  ├──────────────────┤
+                                  │ CLI refine/summarize:
+                                  │ 外部 LLM API
+                                  └──────────────────┘
 ```
 
 ### 模块说明
 
 | 模块 | 路径 | 说明 |
 |------|------|------|
-| URL 解析 | `bbt/bilibili/parser.py` | 支持 BV/AV/EP/SS/MD 号及 b23.tv 短链接，BV↔AV 互转 |
+| URL 解析 | `bbt/bilibili/parser.py` | 支持 BV/AV/EP/SS 号及 b23.tv 短链接，BV↔AV 互转 |
 | API 客户端 | `bbt/bilibili/api.py` | WBI 签名、DASH 音频流获取、FLV 合流兜底 |
 | 下载器 | `bbt/bilibili/downloader.py` | 选最高质量音频流下载，合流格式自动 ffmpeg 提取 |
 | 转写引擎 | `bbt/transcriber/whisper_engine.py` | SenseVoice 模型 (sherpa-onnx) + Silero VAD 分段，输出 SRT/TXT |
-| LLM 客户端 | `bbt/llm/client.py` | OpenAI 兼容接口，字幕修正 + 章节总结 |
-| 流程编排 | `bbt/pipeline.py` | 串联四步流程，统一进度回调 |
+| LLM 客户端 | `bbt/llm/client.py` | OpenAI 兼容接口，CLI 模式下的字幕修正 + 章节总结 |
+| 流程编排 | `bbt/pipeline.py` | 串联下载/转写/修正/总结流程，统一进度回调 |
 | CLI | `bbt/cli.py` | typer 命令行，支持逐步或全流程执行 |
 | GUI | `bbt/gui.py` | tkinter 界面，后台线程执行任务 |
+| Skill | `skills/bbt-video/SKILL.md` | Claude Code skill，直接精校+总结+飞书发布 |
 | 配置 | `bbt/config.py` | TOML 配置管理 |
 
 ### 项目结构
@@ -43,8 +49,12 @@ BBText/
 │   ├── transcriber/
 │   │   └── whisper_engine.py  # SenseVoice 转写
 │   └── llm/
-│       └── client.py        # LLM 修正 + 总结
-├── config.toml              # 配置文件
+│       └── client.py        # LLM 客户端（CLI refine/summarize 用）
+├── skills/
+│   └── bbt-video/
+│       ├── SKILL.md         # Claude Code skill 定义
+│       └── scripts/         # 辅助脚本（publish、分块等）
+├── config.toml.demo         # 配置模板（复制为 config.toml 使用）
 ├── main.py                  # 入口
 ├── pyproject.toml
 └── tests/
@@ -210,7 +220,8 @@ device = "cpu"
 
 - **B站下载**：纯 Python 实现，参考 BBDown 的 WBI 签名算法，支持 DASH 和 FLV 合流两种格式
 - **语音转写**：使用 SenseVoice 模型（阿里达摩院），通过 sherpa-onnx 本地推理，Silero VAD 做语音分段
-- **LLM**：通过 OpenRouter 调用 OpenAI 兼容 API，支持任意兼容模型
+- **精校总结（bbt-video skill）**：由 Claude 直接完成字幕精校和章节总结，无需额外 LLM API
+- **精校总结（CLI）**：通过 OpenAI 兼容 API 调用外部 LLM，支持 OpenRouter 等任意兼容服务
 
 ## License
 

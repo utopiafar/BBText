@@ -59,17 +59,12 @@ class BBTextGUI:
         param_frame = ttk.LabelFrame(self.root, text="参数配置", padding=8)
         param_frame.pack(fill="x", padx=10, pady=5)
 
-        # Whisper 模型
+        # 设备选择
         row1 = ttk.Frame(param_frame)
         row1.pack(fill="x", pady=2)
-        ttk.Label(row1, text="Whisper 模型:", width=12, anchor="w").pack(side="left")
-        self.whisper_model_var = tk.StringVar(value=self.config.whisper.model)
-        model_combo = ttk.Combobox(row1, textvariable=self.whisper_model_var, values=["tiny", "base", "small", "medium", "large-v3"], state="readonly", width=15)
-        model_combo.pack(side="left", padx=(0, 20))
-
-        ttk.Label(row1, text="语言:", width=5, anchor="w").pack(side="left")
-        self.language_var = tk.StringVar(value=self.config.whisper.language)
-        ttk.Combobox(row1, textvariable=self.language_var, values=["zh", "en", "ja", "ko", "auto"], state="readonly", width=6).pack(side="left")
+        ttk.Label(row1, text="推理设备:", width=12, anchor="w").pack(side="left")
+        self.device_var = tk.StringVar(value=self.config.transcriber.device)
+        ttk.Combobox(row1, textvariable=self.device_var, values=["coreml", "cuda", "cpu"], state="readonly", width=15).pack(side="left")
 
         # LLM 模型
         row2 = ttk.Frame(param_frame)
@@ -118,8 +113,7 @@ class BBTextGUI:
             return
 
         # 更新配置
-        self.config.whisper.model = self.whisper_model_var.get()
-        self.config.whisper.language = self.language_var.get()
+        self.config.transcriber.device = self.device_var.get()
         self.config.llm.model = self.llm_model_var.get()
 
         self.running = True

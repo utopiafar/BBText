@@ -80,8 +80,7 @@ class Pipeline:
             for audio_path in result.audio_files:
                 srt_path = transcribe_audio(
                     audio_path,
-                    device=self.config.whisper.device,
-                    language=self.config.whisper.language,
+                    device=self.config.transcriber.device,
                     fmt=self.config.output.format,
                     timestamps=self.config.output.timestamps,
                     progress_callback=stage_progress,

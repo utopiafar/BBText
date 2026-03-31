@@ -23,11 +23,8 @@ class BilibiliConfig:
 
 
 @dataclass
-class WhisperConfig:
-    model: str = "large-v3"
-    device: str = "coreml"
-    language: str = "zh"
-    compute_type: str = "int8"
+class TranscriberConfig:
+    device: str = "coreml"  # "coreml" (Apple Silicon), "cuda" (NVIDIA GPU), "cpu"
 
 
 @dataclass
@@ -54,7 +51,7 @@ class FeishuConfig:
 @dataclass
 class AppConfig:
     bilibili: BilibiliConfig = field(default_factory=BilibiliConfig)
-    whisper: WhisperConfig = field(default_factory=WhisperConfig)
+    transcriber: TranscriberConfig = field(default_factory=TranscriberConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     feishu: FeishuConfig = field(default_factory=FeishuConfig)
@@ -91,12 +88,12 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         b = raw["bilibili"]
         cfg.bilibili.cookie = b.get("cookie", cfg.bilibili.cookie)
 
-    if "whisper" in raw:
+    if "transcriber" in raw:
+        t = raw["transcriber"]
+        cfg.transcriber.device = t.get("device", cfg.transcriber.device)
+    elif "whisper" in raw:  # 兼容旧配置
         w = raw["whisper"]
-        cfg.whisper.model = w.get("model", cfg.whisper.model)
-        cfg.whisper.device = w.get("device", cfg.whisper.device)
-        cfg.whisper.language = w.get("language", cfg.whisper.language)
-        cfg.whisper.compute_type = w.get("compute_type", cfg.whisper.compute_type)
+        cfg.transcriber.device = w.get("device", cfg.transcriber.device)
 
     if "llm" in raw:
         l = raw["llm"]

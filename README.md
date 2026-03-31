@@ -91,11 +91,8 @@ cp config.toml.demo config.toml
 [bilibili]
 cookie = ""          # 可选，登录后可获取更高质量音频
 
-[whisper]
-model = "large-v3"   # 保留字段，实际使用 SenseVoice
-device = "coreml"     # Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
-language = "zh"
-compute_type = "int8"
+[transcriber]
+device = "coreml"    # Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
 
 [llm]
 provider = "openai"
@@ -113,7 +110,7 @@ user_id = ""         # 可选，飞书用户 open_id（bbt-video skill 发送通
 
 > **安全提示**：`config.toml` 已被 `.gitignore` 排除，不会被提交到 Git。API Key 也可以通过环境变量 `BBT_LLM_API_KEY` 设置，避免写入配置文件。
 
-SenseVoice 模型会自动下载到 `~/.coli/models/` 目录。
+SenseVoice 模型首次使用时会自动下载到 `~/.cache/bbt/` 目录。
 
 ## 使用方法
 
@@ -170,7 +167,7 @@ SenseVoice 通过 sherpa-onnx 使用 ONNX Runtime 进行推理，支持多种硬
 macOS 上 sherpa-onnx 依赖的 onnxruntime 默认已包含 `CoreMLExecutionProvider`，无需额外安装。只需将 `config.toml` 中 `device` 设为 `"coreml"`：
 
 ```toml
-[whisper]
+[transcriber]
 device = "coreml"
 ```
 
@@ -196,7 +193,7 @@ uv pip install onnxruntime-gpu
 然后在 `config.toml` 中设置：
 
 ```toml
-[whisper]
+[transcriber]
 device = "cuda"
 ```
 
@@ -212,7 +209,7 @@ uv run python -c "import onnxruntime; print(onnxruntime.get_available_providers(
 如果 GPU 不可用或遇到兼容问题，可回退到 CPU 模式：
 
 ```toml
-[whisper]
+[transcriber]
 device = "cpu"
 ```
 

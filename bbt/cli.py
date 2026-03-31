@@ -85,17 +85,11 @@ def download(
 def transcribe(
     audio_file: str = typer.Argument(..., help="音频文件路径"),
     config_path: Optional[str] = typer.Option(None, "--config", "-c", help="配置文件路径"),
-    model: Optional[str] = typer.Option(None, "--model", "-m", help="Whisper 模型"),
-    language: Optional[str] = typer.Option(None, "--language", "-l", help="语言代码"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="输出 SRT 路径"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="详细日志"),
 ) -> None:
-    """转写音频文件为 SRT 字幕"""
+    """转写音频文件为 SRT 字幕（SenseVoice 引擎）"""
     cfg = _load(config_path, verbose)
-    if model:
-        cfg.whisper.model = model
-    if language:
-        cfg.whisper.language = language
 
     from .transcriber.whisper_engine import transcribe_audio
 
@@ -109,8 +103,7 @@ def transcribe(
         task = progress.add_task("转写中...", total=100)
         srt_path = transcribe_audio(
             audio_file, output_srt=output,
-            device=cfg.whisper.device,
-            language=cfg.whisper.language,
+            device=cfg.transcriber.device,
             fmt=cfg.output.format,
             timestamps=cfg.output.timestamps,
             progress_callback=lambda msg, p: progress.update(task, description=msg, completed=int(p * 100)),
@@ -258,10 +251,7 @@ def show_config(
     cfg = load_config(config_path)
     console.print("[bold]当前配置:[/bold]\n")
     console.print(f"  bilibili.cookie: {'***' if cfg.bilibili.cookie else '(未设置)'}")
-    console.print(f"  whisper.model: {cfg.whisper.model}")
-    console.print(f"  whisper.device: {cfg.whisper.device}")
-    console.print(f"  whisper.language: {cfg.whisper.language}")
-    console.print(f"  whisper.compute_type: {cfg.whisper.compute_type}")
+    console.print(f"  transcriber.device: {cfg.transcriber.device}")
     console.print(f"  llm.api_key: {'***' if cfg.llm.api_key else '(未设置)'}")
     console.print(f"  llm.base_url: {cfg.llm.base_url}")
     console.print(f"  llm.model: {cfg.llm.model}")

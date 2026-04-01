@@ -77,6 +77,16 @@ brew install ffmpeg  # macOS
 # 或 apt install ffmpeg  # Linux
 ```
 
+> **macOS 用户注意**：如果运行时遇到 `Library not loaded: @rpath/libonnxruntime.x.x.x.dylib` 错误，请执行以下命令修复动态库：
+> ```bash
+> # 查找 onnxruntime 动态库位置
+> find .venv -name "libonnxruntime*.dylib" 2>/dev/null
+>
+> # 复制/链接到 sherpa_onnx 目录（将 x.x.x 替换为实际版本号）
+> cp .venv/lib/python3.12/site-packages/onnxruntime/capi/libonnxruntime.x.x.x.dylib \
+>    .venv/lib/python3.12/site-packages/sherpa_onnx/lib/libonnxruntime.x.x.x.dylib
+> ```
+
 ## 配置
 
 复制配置模板并编辑：
@@ -112,35 +122,55 @@ user_id = ""         # 可选，飞书用户 open_id（bbt-video skill 发送通
 
 SenseVoice 模型首次使用时会自动下载到 `~/.cache/bbt/` 目录。
 
+## Claude Code Skill（可选）
+
+项目包含 `bbt-video` skill，可在 Claude Code 对话中直接处理 B 站视频：
+
+```bash
+# 将 skill 链接到 Claude Code skills 目录
+ln -s /path/to/BBText/skills/bbt-video ~/.claude/skills/bbt-video
+```
+
+配置完成后，在 Claude Code 中直接提供 B 站视频链接即可触发全自动流程（下载 → 转写 → 精校 → 总结 → 飞书文档）。
+
+**飞书配置（用于自动创建文档和通知）：**
+
+1. 从飞书云空间地址栏获取 `folder_token`（`https://xxx.feishu.cn/drive/folder/xxx` 中的最后一段）
+2. 使用 `lark-cli` 获取你的 `user_id`：
+   ```bash
+   lark-cli contact +get-user
+   ```
+3. 填入 `config.toml` 的 `[feishu]` 部分
+
 ## 使用方法
 
 ### CLI
 
 ```bash
 # 全流程：下载 → 转写 → 修正 → 总结
-python main.py pipeline "https://www.bilibili.com/video/BV1xx411c7mD"
+uv run python main.py pipeline "https://www.bilibili.com/video/BV1xx411c7mD"
 
 # 只下载音频
-python main.py download "https://www.bilibili.com/video/BV1xx411c7mD"
+uv run python main.py download "https://www.bilibili.com/video/BV1xx411c7mD"
 
 # 只转写已有音频
-python main.py transcribe output/xxx.m4a
+uv run python main.py transcribe output/xxx.m4a
 
 # 只做 LLM 修正
-python main.py refine output/xxx.srt
+uv run python main.py refine output/xxx.srt
 
 # 只做章节总结
-python main.py summarize output/xxx.srt
+uv run python main.py summarize output/xxx.srt
 
 # 跳过某些步骤
-python main.py pipeline "<url>" --skip-refine
-python main.py pipeline "<url>" --skip-summarize
+uv run python main.py pipeline "<url>" --skip-refine
+uv run python main.py pipeline "<url>" --skip-summarize
 
 # 查看当前配置
-python main.py config
+uv run python main.py config
 
 # 启动 GUI
-python main.py gui
+uv run python main.py gui
 ```
 
 ### 输出文件

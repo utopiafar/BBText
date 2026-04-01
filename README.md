@@ -62,7 +62,13 @@ BBText/
 
 ## 安装
 
-需要 Python >= 3.12，使用 [uv](https://docs.astral.sh/uv/) 管理依赖：
+### 前置依赖
+
+- **Python >= 3.12**（推荐使用 [uv](https://docs.astral.sh/uv/) 管理依赖）
+- **ffmpeg**（音频处理）
+- **lark-cli**（飞书文档创建和通知，使用 bbt-video skill 时需要）
+
+### 1. 安装 BBText
 
 ```bash
 # 克隆项目
@@ -87,7 +93,27 @@ brew install ffmpeg  # macOS
 >    .venv/lib/python3.12/site-packages/sherpa_onnx/lib/libonnxruntime.x.x.x.dylib
 > ```
 
-## 配置
+### 2. 安装 lark-cli（使用 bbt-video skill 时需要）
+
+[**lark-cli**](https://github.com/larksuite/cli) 是飞书官方 CLI 工具，bbt-video skill 通过它创建飞书文档和发送通知。
+
+```bash
+# 安装 lark-cli
+npm install -g @larksuite/cli
+
+# 安装 lark-cli 的 Claude Code skills
+npx skills add larksuite/cli -y -g
+
+# 配置飞书应用凭证（交互式引导，需要浏览器操作）
+lark-cli config init
+
+# 登录授权
+lark-cli auth login --recommend
+```
+
+> **注意**：`lark-cli config init` 会在浏览器中引导你创建飞书开放平台应用并配置凭证。完成登录后，lark-cli 会获得创建文档、发送消息等权限。详细说明参见 [lark-cli 文档](https://github.com/larksuite/cli)。
+
+### 3. 配置 BBText
 
 复制配置模板并编辑：
 
@@ -122,7 +148,17 @@ user_id = ""         # 可选，飞书用户 open_id（bbt-video skill 发送通
 
 SenseVoice 模型首次使用时会自动下载到 `~/.cache/bbt/` 目录。
 
-## Claude Code Skill（可选）
+**飞书配置说明**（使用 bbt-video skill 自动发布到飞书时需要）：
+
+1. 确保 lark-cli 已安装并登录（见上方步骤 2）
+2. 从飞书云空间地址栏获取 `folder_token`（`https://xxx.feishu.cn/drive/folder/xxx` 中的最后一段）
+3. 使用 lark-cli 获取你的 `user_id`：
+   ```bash
+   lark-cli contact +get-user
+   ```
+4. 填入 `config.toml` 的 `[feishu]` 部分
+
+### 4. 安装 bbt-video Skill（可选）
 
 项目包含 `bbt-video` skill，可在 Claude Code 对话中直接处理 B 站视频：
 
@@ -132,15 +168,6 @@ ln -s /path/to/BBText/skills/bbt-video ~/.claude/skills/bbt-video
 ```
 
 配置完成后，在 Claude Code 中直接提供 B 站视频链接即可触发全自动流程（下载 → 转写 → 精校 → 总结 → 飞书文档）。
-
-**飞书配置（用于自动创建文档和通知）：**
-
-1. 从飞书云空间地址栏获取 `folder_token`（`https://xxx.feishu.cn/drive/folder/xxx` 中的最后一段）
-2. 使用 `lark-cli` 获取你的 `user_id`：
-   ```bash
-   lark-cli contact +get-user
-   ```
-3. 填入 `config.toml` 的 `[feishu]` 部分
 
 ## 使用方法
 

@@ -58,8 +58,17 @@ def main():
         config = load_config()
         pipeline = Pipeline(config)
 
+        last_progress = {"pct": -1, "msg": ""}
+
         def progress(msg: str, pct: float) -> None:
-            logger.info("[Pipeline %.0f%%] %s", pct * 100, msg)
+            pct_int = int(pct * 100)
+            if pct_int == last_progress["pct"] and msg == last_progress["msg"]:
+                return
+            if pct_int - last_progress["pct"] < 2 and msg == last_progress["msg"] and pct_int < 100:
+                return
+            last_progress["pct"] = pct_int
+            last_progress["msg"] = msg
+            logger.info("[Pipeline %d%%] %s", pct_int, msg)
 
         pipeline_result = pipeline.run(
             video_url,

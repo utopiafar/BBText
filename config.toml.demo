@@ -2,7 +2,8 @@
 cookie = ""          # 可选，登录后可获取更高质量音频
 
 [transcriber]
-device = "coreml"    # Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
+device = "coreml"    # "auto" 自动选择；Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
+num_threads = 4      # CPU/CoreML 调度线程数；CPU 模式可按机器适当调大
 
 [llm]
 provider = "openai"  # "openai" 或 "anthropic"

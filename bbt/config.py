@@ -24,7 +24,8 @@ class BilibiliConfig:
 
 @dataclass
 class TranscriberConfig:
-    device: str = "coreml"  # "coreml" (Apple Silicon), "cuda" (NVIDIA GPU), "cpu"
+    device: str = "coreml"  # "auto", "coreml" (Apple Silicon), "cuda" (NVIDIA GPU), "cpu"
+    num_threads: int = 4
 
 
 @dataclass
@@ -91,9 +92,11 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     if "transcriber" in raw:
         t = raw["transcriber"]
         cfg.transcriber.device = t.get("device", cfg.transcriber.device)
+        cfg.transcriber.num_threads = int(t.get("num_threads", cfg.transcriber.num_threads))
     elif "whisper" in raw:  # 兼容旧配置
         w = raw["whisper"]
         cfg.transcriber.device = w.get("device", cfg.transcriber.device)
+        cfg.transcriber.num_threads = int(w.get("num_threads", cfg.transcriber.num_threads))
 
     if "llm" in raw:
         l = raw["llm"]

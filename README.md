@@ -1,15 +1,15 @@
 # BBText - B站视频音频转字幕工具
 
-BBText 是一个 Python 命令行 + GUI 工具，用于自动下载 B 站视频的音频，本地转写成字幕。搭配 Claude Code skill（bbt-video）可直接在对话中完成字幕精校和章节总结，并自动发布到飞书文档。CLI 也支持通过外部 LLM API 做字幕修正和总结。
+BBText 是一个 Python 命令行 + GUI 工具，用于自动下载 B 站视频的音频，本地转写成字幕。搭配 Claude Code skill（bbt-video）可直接在对话中完成字幕精校和章节总结，生成本地 Markdown 发布稿，并自动发布到飞书文档。CLI 也支持通过外部 LLM API 做字幕修正和总结。
 
 ## 架构
 
 ```
-URL 输入 → 音频下载 → 本地转写 → 精校修正 → 章节总结 → 飞书文档
-  ↓          ↓           ↓          ↓          ↓          ↓
-Bilibili   DASH/FLV   SenseVoice  ┌──────────────────┐  lark-cli
-WBI 签名   纯音频提取  sherpa-onnx  │ bbt-video skill:  │  自动创建
-                                  │ Claude 直接精校    │  文档+通知
+URL 输入 → 音频下载 → 本地转写 → 精校修正 → 章节总结 → Markdown 发布稿 → 飞书文档
+  ↓          ↓           ↓          ↓          ↓             ↓             ↓
+Bilibili   DASH/FLV   SenseVoice  ┌──────────────────┐  本地保存       lark-cli
+WBI 签名   纯音频提取  sherpa-onnx  │ bbt-video skill:  │  .md 文件      自动创建
+                                  │ Claude 直接精校    │               文档+通知
                                   ├──────────────────┤
                                   │ CLI refine/summarize:
                                   │ 外部 LLM API
@@ -28,7 +28,7 @@ WBI 签名   纯音频提取  sherpa-onnx  │ bbt-video skill:  │  自动创�
 | 流程编排 | `bbt/pipeline.py` | 串联下载/转写/修正/总结流程，统一进度回调 |
 | CLI | `bbt/cli.py` | typer 命令行，支持逐步或全流程执行 |
 | GUI | `bbt/gui.py` | tkinter 界面，后台线程执行任务 |
-| Skill | `skills/bbt-video/SKILL.md` | Claude Code skill，直接精校+总结+飞书发布 |
+| Skill | `skills/bbt-video/SKILL.md` | Claude Code skill，直接精校+总结+本地 Markdown+飞书发布 |
 | 配置 | `bbt/config.py` | TOML 配置管理 |
 
 ### 项目结构
@@ -128,7 +128,8 @@ cp config.toml.demo config.toml
 cookie = ""          # 可选，登录后可获取更高质量音频
 
 [transcriber]
-device = "coreml"    # Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
+device = "coreml"    # "auto" 自动选择；Apple Silicon 用 "coreml"，NVIDIA GPU 用 "cuda"，CPU 用 "cpu"
+num_threads = 4      # CPU/CoreML 调度线程数；CPU 模式可按机器适当调大
 
 [llm]
 provider = "openai"
@@ -167,7 +168,7 @@ SenseVoice 模型首次使用时会自动下载到 `~/.cache/bbt/` 目录。
 ln -s /path/to/BBText/skills/bbt-video ~/.claude/skills/bbt-video
 ```
 
-配置完成后，在 Claude Code 中直接提供 B 站视频链接即可触发全自动流程（下载 → 转写 → 精校 → 总结 → 飞书文档）。
+配置完成后，在 Claude Code 中直接提供 B 站视频链接即可触发全自动流程（下载 → 转写 → 精校 → 总结 → 本地 Markdown → 飞书文档）。
 
 ## 使用方法
 
@@ -208,6 +209,7 @@ uv run python main.py gui
 - `<标题>.srt` — 原始转写字幕
 - `<标题>_refined.srt` — LLM 修正后的字幕
 - `<标题>_summary.txt` — 章节总结
+- `<标题>_doc.md` — 与飞书文档内容一致的本地 Markdown 发布稿
 
 ### LLM 功能
 
@@ -221,14 +223,15 @@ SenseVoice 通过 sherpa-onnx 使用 ONNX Runtime 进行推理，支持多种硬
 
 ### Apple Silicon (M1/M2/M3/M4) — CoreML
 
-macOS 上 sherpa-onnx 依赖的 onnxruntime 默认已包含 `CoreMLExecutionProvider`，无需额外安装。只需将 `config.toml` 中 `device` 设为 `"coreml"`：
+macOS 上 sherpa-onnx 依赖的 onnxruntime 默认已包含 `CoreMLExecutionProvider`，无需额外安装。只需将 `config.toml` 中 `device` 设为 `"coreml"`，也可以设为 `"auto"` 让程序自动选择可用硬件 provider：
 
 ```toml
 [transcriber]
 device = "coreml"
+num_threads = 4
 ```
 
-CoreML 会利用 Apple GPU 和 Neural Engine 加速推理，M 系列芯片上速度提升明显。
+CoreML 可以利用 Apple GPU / Neural Engine 加速推理，但实际速度取决于模型形态和音频切分方式。SenseVoice int8 小模型在部分 M 系列机器上可能 CPU 更快，建议用同一段音频分别测试 `--device coreml` 和 `--device cpu` 后选择。
 
 验证 CoreML 是否可用：
 
@@ -252,6 +255,7 @@ uv pip install onnxruntime-gpu
 ```toml
 [transcriber]
 device = "cuda"
+num_threads = 4
 ```
 
 需要系统已安装 CUDA Toolkit 和 cuDNN。验证 CUDA 是否可用：
@@ -268,6 +272,14 @@ uv run python -c "import onnxruntime; print(onnxruntime.get_available_providers(
 ```toml
 [transcriber]
 device = "cpu"
+num_threads = 4
+```
+
+CLI 也支持临时覆盖设备和线程数，无需修改配置文件：
+
+```bash
+uv run python main.py transcribe output/xxx.m4a --device cpu --num-threads 8
+uv run python main.py pipeline "<url>" --device coreml --num-threads 4
 ```
 
 ## 技术细节

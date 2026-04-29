@@ -64,7 +64,7 @@ class BBTextGUI:
         row1.pack(fill="x", pady=2)
         ttk.Label(row1, text="推理设备:", width=12, anchor="w").pack(side="left")
         self.device_var = tk.StringVar(value=self.config.transcriber.device)
-        ttk.Combobox(row1, textvariable=self.device_var, values=["coreml", "cuda", "cpu"], state="readonly", width=15).pack(side="left")
+        ttk.Combobox(row1, textvariable=self.device_var, values=["auto", "coreml", "cuda", "cpu"], state="readonly", width=15).pack(side="left")
 
         # LLM 模型
         row2 = ttk.Frame(param_frame)

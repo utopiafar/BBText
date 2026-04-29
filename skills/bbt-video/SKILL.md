@@ -1,11 +1,11 @@
 ---
 name: bbt-video
-description: "Bilibili 视频转文字全流程编排：下载音频、语音转写、字幕精校、生成概要，并创建飞书文档。当用户提供 Bilibili (B站) 视频链接（含 BV/AV/EP/SS 号、b23.tv 短链接）且需要处理视频内容时触发。包括转译、转文字、总结、精校、下载字幕、概括、整理视频内容等操作。甚至仅提供链接且上下文暗示需要处理视频内容时也应触发。"
+description: "Bilibili 视频转文字全流程编排：下载音频、语音转写、字幕精校、生成概要、生成本地 Markdown 发布稿，并创建飞书文档。当用户提供 Bilibili (B站) 视频链接（含 BV/AV/EP/SS 号、b23.tv 短链接）且需要处理视频内容时触发。包括转译、转文字、总结、精校、下载字幕、概括、整理视频内容等操作。甚至仅提供链接且上下文暗示需要处理视频内容时也应触发。"
 ---
 
 # Bilibili 视频转文字全流程
 
-收到用户的 B 站视频链接后，完成从下载到精校文字 + 飞书文档的全流程。下载和转写由脚本完成，精校和概要由你直接完成（不需要调用外部 LLM API）。
+收到用户的 B 站视频链接后，完成从下载到精校文字 + 本地 Markdown 发布稿 + 飞书文档的全流程。下载和转写由脚本完成，精校和概要由你直接完成（不需要调用外部 LLM API）。
 
 ## 工作流程
 
@@ -109,20 +109,30 @@ cd <BBText项目根目录> && uv run python skills/bbt-video/scripts/publish.py 
 
 将概要保存为原 SRT 文件同目录下的 `<视频标题>_summary.txt`。
 
-### 6. 创建飞书文档
+### 6. 生成本地 Markdown 发布稿
 
-使用 lark-cli 创建飞书文档，将概要和精校全文写入文档。
+将准备写入飞书文档的完整内容先保存为本地 Markdown 文件。保存路径为原 SRT 文件同目录下的 `<视频标题>_doc.md`。
 
-**先读取配置**：从项目根目录的 `config.toml` 中读取飞书配置（`[feishu]` 下的 `folder_token` 和 `user_id`）。如果配置为空，跳过飞书相关步骤并提示用户配置。
-
-```bash
-# 创建文档（folder_token 从 config.toml [feishu] 读取）
-lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "<内容>"
-```
+这份 Markdown 是飞书文档的本地镜像，内容必须与准备发布到飞书的完整正文一致，不要因为飞书分块而拆散或省略内容。即使飞书配置为空或飞书创建失败，也要保留这个本地 Markdown 文件。
 
 `<翻译标注>` 的含义：如果源语言是中文则为空（即标题为"视频标题 - 转译精校"），如果是英文翻译来的则填"（英译中）"（即"视频标题 - 转译精校（英译中）"），其他语言类推。
 
-文档内容结构（Markdown）：
+推荐使用脚本生成，避免手工拼接遗漏：
+
+```bash
+DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
+SUMMARY_FILE="<原 SRT 同目录>/<视频标题>_summary.txt"
+REFINED_FILE="<原 SRT 同目录>/<视频标题>_refined.txt"
+
+uv run python skills/bbt-video/scripts/build_doc_markdown.py \
+  --summary "$SUMMARY_FILE" \
+  --refined "$REFINED_FILE" \
+  --title "<视频标题>" \
+  --url "<视频URL>" \
+  --output "$DOC_MD"
+```
+
+Markdown 内容结构：
 
 ```markdown
 ## 概要
@@ -140,19 +150,40 @@ lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --fo
 <步骤 4 精校后的纯文本内容>
 ```
 
-如果精校全文超过 30000 字节（约 10000 中文字），需要分块追加：
+### 7. 创建飞书文档
+
+使用 lark-cli 创建飞书文档，将步骤 6 生成的本地 Markdown 发布稿写入文档。
+
+**先读取配置**：从项目根目录的 `config.toml` 中读取飞书配置（`[feishu]` 下的 `folder_token` 和 `user_id`）。如果配置为空，跳过飞书相关步骤并提示用户配置，但不要删除本地 Markdown 发布稿。
 
 ```bash
-# 先创建文档（包含概要 + 第一块全文，folder_token 从 config.toml 读取）
-lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "<概要+链接+第一块全文>"
+DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
 
-# 追加剩余块
-lark-cli docs +update --mode append --doc "<doc_id>" --markdown "<下一块全文>"
+# 创建文档（folder_token 从 config.toml [feishu] 读取）
+lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "$(<"$DOC_MD")"
+```
+
+如果本地 Markdown 发布稿超过 30000 字节（约 10000 中文字），需要分块创建并追加：
+
+```bash
+DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
+
+# 先将本地 Markdown 发布稿分块
+uv run python skills/bbt-video/scripts/split_chunks.py "$DOC_MD" 30000
+# 记录输出的每一行路径，第一行用于创建文档，后续行用于追加
+
+# 用第一块创建文档（folder_token 从 config.toml 读取）
+FIRST_CHUNK="<第一块路径>"
+lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "$(<"$FIRST_CHUNK")"
+
+# 提取 document_id 后，追加剩余块
+NEXT_CHUNK="<下一块路径>"
+lark-cli docs +update --mode append --doc "<doc_id>" --markdown "$(<"$NEXT_CHUNK")"
 ```
 
 从 `lark-cli docs +create` 的输出中提取 `document_id`，拼接为 `https://feishu.cn/docx/<document_id>` 得到文档链接。
 
-### 7. 发送飞书通知
+### 8. 发送飞书通知
 
 从 `config.toml` 的 `[feishu]` 读取 `user_id`。如果配置为空则跳过此步骤。
 
@@ -160,11 +191,11 @@ lark-cli docs +update --mode append --doc "<doc_id>" --markdown "<下一块全�
 lark-cli im +messages-send --as bot --user-id <user_id> --text "视频「<视频标题>」已转译精校完成，文档已保存。\n飞书文档：<文档链接>"
 ```
 
-### 8. 向用户汇报
+### 9. 向用户汇报
 
 向用户汇报：
 - 视频标题
-- 本地文件保存位置（精校文本和概要）
+- 本地文件保存位置（精校文本、概要、本地 Markdown 发布稿）
 - 飞书文档链接
 
 ## 处理多个视频

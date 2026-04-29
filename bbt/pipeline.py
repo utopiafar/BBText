@@ -81,6 +81,7 @@ class Pipeline:
                 srt_path = transcribe_audio(
                     audio_path,
                     device=self.config.transcriber.device,
+                    num_threads=self.config.transcriber.num_threads,
                     fmt=self.config.output.format,
                     timestamps=self.config.output.timestamps,
                     progress_callback=stage_progress,

@@ -22,6 +22,66 @@ TYPENO_MODEL_NAME = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
 SAMPLE_RATE = 16000
 
 
+def _available_ort_providers() -> list[str]:
+    """Return ONNX Runtime execution providers visible to Python."""
+    try:
+        import onnxruntime as ort
+
+        return list(ort.get_available_providers())
+    except Exception as e:
+        logger.debug("无法读取 ONNX Runtime providers: %s", e)
+        return []
+
+
+def _select_provider(device: str, available_providers: list[str] | None = None) -> str:
+    """Map a user-facing device name to a sherpa-onnx provider."""
+    providers = available_providers if available_providers is not None else _available_ort_providers()
+    provider_set = set(providers)
+    requested = (device or "cpu").strip().lower()
+
+    if requested in {"auto", "gpu"}:
+        if "CUDAExecutionProvider" in provider_set:
+            return "cuda"
+        if "CoreMLExecutionProvider" in provider_set:
+            return "coreml"
+        return "cpu"
+
+    if requested in {"cpu", "coreml", "cuda"}:
+        if requested == "coreml" and "CoreMLExecutionProvider" not in provider_set:
+            logger.warning("请求 coreml，但当前 ONNX Runtime providers 不包含 CoreMLExecutionProvider，回退到 CPU")
+            return "cpu"
+        if requested == "cuda" and "CUDAExecutionProvider" not in provider_set:
+            logger.warning("请求 cuda，但当前 ONNX Runtime providers 不包含 CUDAExecutionProvider，回退到 CPU")
+            return "cpu"
+        return requested
+
+    logger.warning("未知转写设备 %r，回退到 CPU；可选值: auto/coreml/cuda/cpu", device)
+    return "cpu"
+
+
+def _probe_audio_duration(audio_path: Path) -> float | None:
+    """Probe audio duration in seconds with ffprobe."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(audio_path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return None
+        duration = float(result.stdout.strip())
+        return duration if duration > 0 else None
+    except Exception as e:
+        logger.debug("无法读取音频时长: %s", e)
+        return None
+
+
 def _get_model_dir() -> Path:
     """获取模型目录，优先使用 TypeNo 已有模型，不存在则自动下载"""
     # 1. 优先检查 BBText 自己的缓存
@@ -99,6 +159,7 @@ def transcribe_audio(
     compute_type: str = "int8",
     language: str = "zh",
     beam_size: int = 5,
+    num_threads: int = 4,
     vad_filter: bool = True,
     progress_callback: Callable[[str, float], None] | None = None,
     fmt: str = "srt",
@@ -138,19 +199,36 @@ def transcribe_audio(
         model_file = model_dir / "model.onnx"
     tokens_file = model_dir / "tokens.txt"
 
-    # 确定推理 provider
-    provider = "coreml" if device != "cpu" else "cpu"
-    logger.info("使用推理设备: %s (provider=%s)", device, provider)
+    available_providers = _available_ort_providers()
+    provider = _select_provider(device, available_providers)
+    num_threads = max(1, int(num_threads))
+    logger.info(
+        "使用推理设备: requested=%s, provider=%s, threads=%d, ORT providers=%s",
+        device,
+        provider,
+        num_threads,
+        available_providers or "unknown",
+    )
 
     # 创建识别器
-    recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-        model=str(model_file),
-        tokens=str(tokens_file),
-        num_threads=4,
-        use_itn=True,
-        provider=provider,
-        debug=False,
-    )
+    def create_recognizer(provider_name: str) -> "sherpa_onnx.OfflineRecognizer":
+        return sherpa_onnx.OfflineRecognizer.from_sense_voice(
+            model=str(model_file),
+            tokens=str(tokens_file),
+            num_threads=num_threads,
+            use_itn=True,
+            provider=provider_name,
+            debug=False,
+        )
+
+    try:
+        recognizer = create_recognizer(provider)
+    except Exception:
+        if provider == "cpu":
+            raise
+        logger.warning("provider=%s 初始化失败，回退到 CPU", provider, exc_info=True)
+        provider = "cpu"
+        recognizer = create_recognizer(provider)
 
     # VAD 配置
     vad_config = sherpa_onnx.VadModelConfig()
@@ -167,6 +245,7 @@ def transcribe_audio(
         progress_callback("转写中...", 0.05)
 
     logger.info("开始转写: %s (SenseVoice)", audio_path.name)
+    audio_duration = _probe_audio_duration(audio_path)
 
     ffmpeg_cmd = [
         "ffmpeg", "-i", str(audio_path),
@@ -211,7 +290,11 @@ def transcribe_audio(
 
         if progress_callback:
             total_duration = num_processed / SAMPLE_RATE
-            progress_callback(f"转写中... ({total_duration:.0f}s)", 0.1)
+            if audio_duration:
+                p = 0.05 + min(total_duration / audio_duration, 1.0) * 0.9
+            else:
+                p = 0.1
+            progress_callback(f"转写中... ({total_duration:.0f}s)", p)
 
     # 处理 buffer 中剩余
     if buffer:
@@ -276,4 +359,3 @@ def _write_output(
                 f.write(f"{i}\n")
                 f.write(f"{format_srt_time(start)} --> {format_srt_time(end)}\n")
                 f.write(f"{text}\n\n")
-

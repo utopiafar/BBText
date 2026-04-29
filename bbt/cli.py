@@ -86,10 +86,16 @@ def transcribe(
     audio_file: str = typer.Argument(..., help="音频文件路径"),
     config_path: Optional[str] = typer.Option(None, "--config", "-c", help="配置文件路径"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="输出 SRT 路径"),
+    device: Optional[str] = typer.Option(None, "--device", help="覆盖转写设备: auto/coreml/cuda/cpu"),
+    num_threads: Optional[int] = typer.Option(None, "--num-threads", help="覆盖转写线程数"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="详细日志"),
 ) -> None:
     """转写音频文件为 SRT 字幕（SenseVoice 引擎）"""
     cfg = _load(config_path, verbose)
+    if device:
+        cfg.transcriber.device = device
+    if num_threads:
+        cfg.transcriber.num_threads = num_threads
 
     from .transcriber.whisper_engine import transcribe_audio
 
@@ -104,6 +110,7 @@ def transcribe(
         srt_path = transcribe_audio(
             audio_file, output_srt=output,
             device=cfg.transcriber.device,
+            num_threads=cfg.transcriber.num_threads,
             fmt=cfg.output.format,
             timestamps=cfg.output.timestamps,
             progress_callback=lambda msg, p: progress.update(task, description=msg, completed=int(p * 100)),
@@ -188,12 +195,18 @@ def pipeline(
     output_dir: Optional[str] = typer.Option(None, "--output-dir", "-o", help="输出目录"),
     skip_refine: bool = typer.Option(False, "--skip-refine", help="跳过 LLM 修正"),
     skip_summarize: bool = typer.Option(False, "--skip-summarize", help="跳过 LLM 总结"),
+    device: Optional[str] = typer.Option(None, "--device", help="覆盖转写设备: auto/coreml/cuda/cpu"),
+    num_threads: Optional[int] = typer.Option(None, "--num-threads", help="覆盖转写线程数"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="详细日志"),
 ) -> None:
     """全流程: 下载 → 转写 → 修正 → 总结"""
     cfg = _load(config_path, verbose)
     if output_dir:
         cfg.output.dir = output_dir
+    if device:
+        cfg.transcriber.device = device
+    if num_threads:
+        cfg.transcriber.num_threads = num_threads
 
     pipe = Pipeline(cfg)
 
@@ -252,6 +265,7 @@ def show_config(
     console.print("[bold]当前配置:[/bold]\n")
     console.print(f"  bilibili.cookie: {'***' if cfg.bilibili.cookie else '(未设置)'}")
     console.print(f"  transcriber.device: {cfg.transcriber.device}")
+    console.print(f"  transcriber.num_threads: {cfg.transcriber.num_threads}")
     console.print(f"  llm.api_key: {'***' if cfg.llm.api_key else '(未设置)'}")
     console.print(f"  llm.base_url: {cfg.llm.base_url}")
     console.print(f"  llm.model: {cfg.llm.model}")

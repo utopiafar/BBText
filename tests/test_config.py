@@ -28,6 +28,7 @@ model = "gpt-4"
 
         cfg = load_config(f.name)
         assert cfg.transcriber.device == "cuda"
+        assert cfg.transcriber.num_threads == 4
         assert cfg.llm.api_key == "test-key"
         assert cfg.llm.base_url == "https://example.com/v1"
         assert cfg.llm.model == "gpt-4"
@@ -39,6 +40,7 @@ model = "gpt-4"
         toml = """
 [whisper]
 device = "cpu"
+num_threads = 8
 """
         f = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
         f.write(toml)
@@ -46,5 +48,6 @@ device = "cpu"
 
         cfg = load_config(f.name)
         assert cfg.transcriber.device == "cpu"
+        assert cfg.transcriber.num_threads == 8
 
         Path(f.name).unlink()

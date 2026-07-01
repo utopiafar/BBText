@@ -123,11 +123,13 @@ cd <BBText项目根目录> && uv run python skills/bbt-video/scripts/publish.py 
 DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
 SUMMARY_FILE="<原 SRT 同目录>/<视频标题>_summary.txt"
 REFINED_FILE="<原 SRT 同目录>/<视频标题>_refined.txt"
+DOC_TITLE="<视频标题> - 转译精校<翻译标注>"
 
 uv run python skills/bbt-video/scripts/build_doc_markdown.py \
   --summary "$SUMMARY_FILE" \
   --refined "$REFINED_FILE" \
   --title "<视频标题>" \
+  --doc-title "$DOC_TITLE" \
   --url "<视频URL>" \
   --output "$DOC_MD"
 ```
@@ -135,6 +137,8 @@ uv run python skills/bbt-video/scripts/build_doc_markdown.py \
 Markdown 内容结构：
 
 ```markdown
+# <视频标题> - 转译精校<翻译标注>
+
 ## 概要
 
 <步骤 5 生成的概要内容>
@@ -152,15 +156,29 @@ Markdown 内容结构：
 
 ### 7. 创建飞书文档
 
-使用 lark-cli 创建飞书文档，将步骤 6 生成的本地 Markdown 发布稿写入文档。
+使用 lark-cli 创建飞书文档，将步骤 6 生成的本地 Markdown 发布稿写入文档。创建文档时 **必须使用用户身份**，确保文档 owner 是当前用户本人。
 
-**先读取配置**：从项目根目录的 `config.toml` 中读取飞书配置（`[feishu]` 下的 `folder_token` 和 `user_id`）。如果配置为空，跳过飞书相关步骤并提示用户配置，但不要删除本地 Markdown 发布稿。
+**先读取配置**：从项目根目录的 `config.toml` 中读取飞书配置（`[feishu]` 下的 `folder_token` 和 `user_id`）。`folder_token` 为空时仍可创建到用户个人空间；`user_id` 只影响步骤 8 的通知。如果飞书创建失败，不要删除本地 Markdown 发布稿。
+
+**用户身份要求**：
+- 创建和追加都使用 `--as user`，不要用 `--as bot` 创建文档，也不要创建后再尝试 owner 转移。
+- 如果 `docs +create --as user` 提示用户授权/token 不可用，先运行 `lark-cli auth login --domain docs --no-wait --json`，把返回的验证链接和 code 交给用户；用户完成授权后，再用返回的 `device_code` 执行 `lark-cli auth login --device-code <device_code>`，然后重试创建。
+- `docs +create` 返回 JSON 中的 `identity` 必须是 `user`。如果不是，停下来排查，不要继续追加或发送通知。
 
 ```bash
 DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
 
-# 创建文档（folder_token 从 config.toml [feishu] 读取）
-lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "$(<"$DOC_MD")"
+# 有 folder_token 时，创建到指定文件夹（folder_token 从 config.toml [feishu] 读取）
+lark-cli docs +create --api-version v2 --as user \
+  --parent-token <folder_token> \
+  --doc-format markdown \
+  --content - < "$DOC_MD"
+
+# 没有 folder_token 时，创建到用户个人空间
+lark-cli docs +create --api-version v2 --as user \
+  --parent-position my_library \
+  --doc-format markdown \
+  --content - < "$DOC_MD"
 ```
 
 如果本地 Markdown 发布稿超过 30000 字节（约 10000 中文字），需要分块创建并追加：
@@ -172,16 +190,35 @@ DOC_MD="<原 SRT 同目录>/<视频标题>_doc.md"
 uv run python skills/bbt-video/scripts/split_chunks.py "$DOC_MD" 30000
 # 记录输出的每一行路径，第一行用于创建文档，后续行用于追加
 
-# 用第一块创建文档（folder_token 从 config.toml 读取）
+# 用第一块创建文档（有 folder_token 用 --parent-token；没有则用 --parent-position my_library）
 FIRST_CHUNK="<第一块路径>"
-lark-cli docs +create --title "<视频标题> - 转译精校<翻译标注>" --folder-token <folder_token> --markdown "$(<"$FIRST_CHUNK")"
+lark-cli docs +create --api-version v2 --as user \
+  --parent-token <folder_token> \
+  --doc-format markdown \
+  --content - < "$FIRST_CHUNK"
 
 # 提取 document_id 后，追加剩余块
 NEXT_CHUNK="<下一块路径>"
-lark-cli docs +update --mode append --doc "<doc_id>" --markdown "$(<"$NEXT_CHUNK")"
+lark-cli docs +update --api-version v2 --as user \
+  --doc "<doc_id>" \
+  --command append \
+  --doc-format markdown \
+  --content - < "$NEXT_CHUNK"
 ```
 
-从 `lark-cli docs +create` 的输出中提取 `document_id`，拼接为 `https://feishu.cn/docx/<document_id>` 得到文档链接。
+从 `lark-cli docs +create` 的输出中提取 `data.document.url` 作为文档链接；如果只拿到 `document_id`，拼接为 `https://feishu.cn/docx/<document_id>`。
+
+创建或分块追加完成后，用用户身份读回验证：
+
+```bash
+lark-cli docs +fetch --api-version v2 --as user \
+  --doc "<文档链接或 document_id>" \
+  --scope outline \
+  --max-depth 3 \
+  --doc-format markdown
+```
+
+验证通过后再进入步骤 8。验证失败时，向用户汇报本地 Markdown 路径和失败原因。
 
 ### 8. 发送飞书通知
 

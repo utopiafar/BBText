@@ -26,9 +26,11 @@ def test_build_doc_markdown_strips_edges():
         refined_text="\n精校全文\n",
         title="测试标题",
         video_url="https://b23.tv/test",
+        doc_title="测试标题 - 转译精校",
     )
 
     assert markdown == (
+        "# 测试标题 - 转译精校\n\n"
         "## 概要\n\n"
         "### 第一章\n概要内容\n\n"
         "---\n\n"
@@ -55,6 +57,8 @@ def test_main_writes_output(tmp_path, capsys):
             str(refined),
             "--title",
             "测试标题",
+            "--doc-title",
+            "测试标题 - 转译精校",
             "--url",
             "https://b23.tv/test",
             "--output",
@@ -63,5 +67,18 @@ def test_main_writes_output(tmp_path, capsys):
     )
 
     assert exit_code == 0
-    assert output.read_text(encoding="utf-8").startswith("## 概要\n\n### 第一章")
+    assert output.read_text(encoding="utf-8").startswith(
+        "# 测试标题 - 转译精校\n\n## 概要\n\n### 第一章"
+    )
     assert capsys.readouterr().out.strip() == str(output)
+
+
+def test_build_doc_markdown_defaults_doc_title_to_video_title():
+    markdown = build_doc_markdown.build_doc_markdown(
+        summary="概要",
+        refined_text="全文",
+        title=" 测试\n标题 ",
+        video_url="https://b23.tv/test",
+    )
+
+    assert markdown.startswith("# 测试 标题\n\n")

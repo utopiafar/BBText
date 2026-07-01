@@ -15,5 +15,5 @@ model = "deepseek/deepseek-v3.2"
 dir = "output"
 
 [feishu]
-folder_token = ""    # 飞书云空间文件夹 token，用于自动保存文档（bbt-video skill 使用）
-user_id = ""         # 飞书用户 open_id，用于发送完成通知（bbt-video skill 使用）
+folder_token = ""    # 可选：飞书云空间文件夹 token；留空时 bbt-video skill 创建到用户个人空间
+user_id = ""         # 可选：飞书用户 open_id，仅用于发送完成通知，不影响文档 owner

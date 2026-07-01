@@ -111,7 +111,7 @@ lark-cli config init
 lark-cli auth login --recommend
 ```
 
-> **注意**：`lark-cli config init` 会在浏览器中引导你创建飞书开放平台应用并配置凭证。完成登录后，lark-cli 会获得创建文档、发送消息等权限。详细说明参见 [lark-cli 文档](https://github.com/larksuite/cli)。
+> **注意**：`lark-cli config init` 会在浏览器中引导你创建飞书开放平台应用并配置凭证。完成登录后，lark-cli 会获得创建文档、发送消息等权限。`bbt-video` skill 创建文档时会显式使用 `--as user`，确保新文档 owner 是当前登录用户本人。详细说明参见 [lark-cli 文档](https://github.com/larksuite/cli)。
 
 ### 3. 配置 BBText
 
@@ -141,8 +141,8 @@ model = "deepseek/deepseek-v3.2"
 dir = "output"
 
 [feishu]
-folder_token = ""    # 可选，飞书云空间文件夹 token（bbt-video skill 自动创建文档用）
-user_id = ""         # 可选，飞书用户 open_id（bbt-video skill 发送通知用）
+folder_token = ""    # 可选：飞书云空间文件夹 token；留空时 bbt-video skill 创建到用户个人空间
+user_id = ""         # 可选：飞书用户 open_id，仅用于发送完成通知，不影响文档 owner
 ```
 
 > **安全提示**：`config.toml` 已被 `.gitignore` 排除，不会被提交到 Git。API Key 也可以通过环境变量 `BBT_LLM_API_KEY` 设置，避免写入配置文件。
@@ -151,13 +151,13 @@ SenseVoice 模型首次使用时会自动下载到 `~/.cache/bbt/` 目录。
 
 **飞书配置说明**（使用 bbt-video skill 自动发布到飞书时需要）：
 
-1. 确保 lark-cli 已安装并登录（见上方步骤 2）
-2. 从飞书云空间地址栏获取 `folder_token`（`https://xxx.feishu.cn/drive/folder/xxx` 中的最后一段）
+1. 确保 lark-cli 已安装并完成用户身份登录（见上方步骤 2）
+2. 可选：从飞书云空间地址栏获取 `folder_token`（`https://xxx.feishu.cn/drive/folder/xxx` 中的最后一段）。留空时，skill 会把文档创建到用户个人空间
 3. 使用 lark-cli 获取你的 `user_id`：
    ```bash
    lark-cli contact +get-user
    ```
-4. 填入 `config.toml` 的 `[feishu]` 部分
+4. 填入 `config.toml` 的 `[feishu]` 部分。`user_id` 只用于发送完成通知，不影响文档 owner
 
 ### 4. 安装 bbt-video Skill（可选）
 
